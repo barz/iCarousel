@@ -1888,7 +1888,7 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
     {
 		int unsigned numberOfMethods;
 		Method *methods = class_copyMethodList(class, &numberOfMethods);
-		for (int i = 0; i < numberOfMethods; i++)
+		for (int unsigned i = 0; i < numberOfMethods; i++)
         {
 			if (method_getName(methods[i]) == selector)
             {
