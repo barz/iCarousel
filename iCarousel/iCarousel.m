@@ -1,7 +1,7 @@
 //
 //  iCarousel.m
 //
-//  Version 1.8 beta 6
+//  Version 1.8 beta 10
 //
 //  Created by Nick Lockwood on 01/04/2011.
 //  Copyright 2011 Charcoal Design
@@ -59,26 +59,26 @@
 
 @implementation NSObject (iCarousel)
 
-- (NSUInteger)numberOfPlaceholdersInCarousel:(iCarousel *)carousel { return 0; }
-- (void)carouselWillBeginScrollingAnimation:(iCarousel *)carousel {}
-- (void)carouselDidEndScrollingAnimation:(iCarousel *)carousel {}
-- (void)carouselDidScroll:(iCarousel *)carousel {}
+- (NSUInteger)numberOfPlaceholdersInCarousel:(__unused iCarousel *)carousel { return 0; }
+- (void)carouselWillBeginScrollingAnimation:(__unused iCarousel *)carousel {}
+- (void)carouselDidEndScrollingAnimation:(__unused iCarousel *)carousel {}
+- (void)carouselDidScroll:(__unused iCarousel *)carousel {}
 
-- (void)carouselCurrentItemIndexDidChange:(iCarousel *)carousel {}
-- (void)carouselWillBeginDragging:(iCarousel *)carousel {}
-- (void)carouselDidEndDragging:(iCarousel *)carousel willDecelerate:(BOOL)decelerate {}
-- (void)carouselWillBeginDecelerating:(iCarousel *)carousel {}
-- (void)carouselDidEndDecelerating:(iCarousel *)carousel {}
+- (void)carouselCurrentItemIndexDidChange:(__unused iCarousel *)carousel {}
+- (void)carouselWillBeginDragging:(__unused iCarousel *)carousel {}
+- (void)carouselDidEndDragging:(__unused iCarousel *)carousel willDecelerate:(__unused BOOL)decelerate {}
+- (void)carouselWillBeginDecelerating:(__unused iCarousel *)carousel {}
+- (void)carouselDidEndDecelerating:(__unused iCarousel *)carousel {}
 
-- (BOOL)carousel:(iCarousel *)carousel shouldSelectItemAtIndex:(NSInteger)index { return YES; }
-- (void)carousel:(iCarousel *)carousel didSelectItemAtIndex:(NSInteger)index {}
+- (BOOL)carousel:(__unused iCarousel *)carousel shouldSelectItemAtIndex:(__unused NSInteger)index { return YES; }
+- (void)carousel:(__unused iCarousel *)carousel didSelectItemAtIndex:(__unused NSInteger)index {}
 
-- (CGFloat)carouselItemWidth:(iCarousel *)carousel { return 0; }
-- (CATransform3D)carousel:(iCarousel *)carousel
-   itemTransformForOffset:(CGFloat)offset
+- (CGFloat)carouselItemWidth:(__unused iCarousel *)carousel { return 0; }
+- (CATransform3D)carousel:(__unused iCarousel *)carousel
+   itemTransformForOffset:(__unused CGFloat)offset
             baseTransform:(CATransform3D)transform { return transform; }
-- (CGFloat)carousel:(iCarousel *)carousel
-     valueForOption:(iCarouselOption)option
+- (CGFloat)carousel:(__unused iCarousel *)carousel
+     valueForOption:(__unused iCarouselOption)option
         withDefault:(CGFloat)value { return value; }
 
 @end
@@ -138,9 +138,10 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
     _contentView = [[UIView alloc] initWithFrame:self.bounds];
     
 #ifdef ICAROUSEL_IOS
-        
+    
     UIPanGestureRecognizer *panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(didPan:)];
     panGesture.delegate = (id <UIGestureRecognizerDelegate>)self;
+    _contentView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [_contentView addGestureRecognizer:panGesture];
     
 #else
@@ -244,11 +245,13 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
 
 - (void)setScrollOffset:(CGFloat)scrollOffset
 {
+    _scrolling = NO;
+    _decelerating = NO;
+    _startOffset = scrollOffset;
+    _endOffset = scrollOffset;
+    
     if (_scrollOffset != scrollOffset)
     {
-        _scrolling = NO;
-        _startOffset = scrollOffset;
-        _endOffset = scrollOffset;
         _scrollOffset = scrollOffset;
         [self didScroll];
     }
@@ -443,10 +446,10 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
 
 - (CGFloat)valueForOption:(iCarouselOption)option withDefault:(CGFloat)value
 {    
-    return [_delegate carousel:self valueForOption:option withDefault:value];
+    return _delegate? [_delegate carousel:self valueForOption:option withDefault:value]: value;
 }
 
-- (CATransform3D)transformForItemView:(UIView *)view withOffset:(CGFloat)offset
+- (CATransform3D)transformForItemViewWithOffset:(CGFloat)offset
 {   
     //set up base transform
     CATransform3D transform = CATransform3DIdentity;
@@ -636,11 +639,6 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
                 return CATransform3DTranslate(transform, offset * _itemWidth * tilt, 0.0f, offset * _itemWidth * spacing);
             }
         }
-        default:
-        {
-            //shouldn't ever happen
-            return CATransform3DIdentity;
-        }
     }
 }
 
@@ -813,7 +811,7 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
     }
     
     //calculate transform
-    CATransform3D transform = [self transformForItemView:view withOffset:offset];
+    CATransform3D transform = [self transformForItemViewWithOffset:offset];
     
     //transform view
     view.superview.layer.transform = transform;
@@ -845,6 +843,7 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
 
 - (void)layoutSubviews
 {
+    [super layoutSubviews];
     _contentView.frame = self.bounds;
     [self layOutItemViews];
 }
@@ -854,7 +853,8 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
 - (void)resizeSubviewsWithOldSize:(NSSize)oldSize
 {
     [self pushAnimationState:NO];
-    [self layoutSubviews];
+    _contentView.frame = self.bounds;
+    [self layOutItemViews];
     [self popAnimationState];
 }
 
@@ -954,7 +954,6 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
         case iCarouselTypeTimeMachine:
         case iCarouselTypeInvertedTimeMachine:
         case iCarouselTypeCustom:
-        default:
         {
             //slightly arbitrary number, chosen for performance reasons
             _numberOfVisibleItems = MAX_VISIBLE_ITEMS;
@@ -1883,12 +1882,12 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
     //https://gist.github.com/mattjgalloway/6279363
     //https://gist.github.com/shaps80/6279008
     
-    Class class = [view class];
-	while (class && class != [UIView class])
+    Class viewClass = [view class];
+	while (viewClass && viewClass != [UIView class])
     {
-		int unsigned numberOfMethods;
-		Method *methods = class_copyMethodList(class, &numberOfMethods);
-		for (int unsigned i = 0; i < numberOfMethods; i++)
+		unsigned int numberOfMethods;
+		Method *methods = class_copyMethodList(viewClass, &numberOfMethods);
+		for (unsigned int i = 0; i < numberOfMethods; i++)
         {
 			if (method_getName(methods[i]) == selector)
             {
@@ -1897,7 +1896,7 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
 			}
 		}
         if (methods) free(methods);
-		class = [class superclass];
+		viewClass = [viewClass superclass];
 	}
     
     if (view.superview && view.superview != self.contentView)
@@ -1908,8 +1907,28 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
 	return NO;
 }
 
+- (id)viewOrSuperview:(UIView *)view ofClass:(Class)class
+{
+    if (!view || view == self.contentView)
+    {
+        return nil;
+    }
+    else if ([view isKindOfClass:class])
+    {
+        return view;
+    }
+    return [self viewOrSuperview:view.superview ofClass:class];
+}
+
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gesture shouldReceiveTouch:(UITouch *)touch
 {
+    if (_scrollEnabled)
+    {
+        _dragging = NO;
+        _scrolling = NO;
+        _decelerating = NO;
+    }
+    
     if ([gesture isKindOfClass:[UITapGestureRecognizer class]])
     {
         //handle tap
@@ -1921,11 +1940,7 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
         }
         if (index != NSNotFound)
         {
-            if (_delegate && ![_delegate carousel:self shouldSelectItemAtIndex:index])
-            {
-                return NO;
-            }
-            else if ([self viewOrSuperview:touch.view implementsSelector:@selector(touchesBegan:withEvent:)])
+            if ([self viewOrSuperview:touch.view implementsSelector:@selector(touchesBegan:withEvent:)])
             {
                 return NO;
             }
@@ -1933,8 +1948,19 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
     }
     else if ([gesture isKindOfClass:[UIPanGestureRecognizer class]])
     {
-        if (!_scrollEnabled || [self viewOrSuperview:touch.view implementsSelector:@selector(touchesMoved:withEvent:)])
+        if (!_scrollEnabled)
         {
+            return NO;
+        }
+        else if ([self viewOrSuperview:touch.view implementsSelector:@selector(touchesMoved:withEvent:)])
+        {
+            UIScrollView *scrollView = [self viewOrSuperview:touch.view ofClass:[UIScrollView class]];
+            if (scrollView)
+            {
+                return !scrollView.scrollEnabled ||
+                (self.vertical && scrollView.contentSize.height <= scrollView.frame.size.height) ||
+                (!self.vertical && scrollView.contentSize.width <= scrollView.frame.size.width);
+            }
             return NO;
         }
     }
@@ -1966,11 +1992,19 @@ NSComparisonResult compareViewDepth(UIView *view1, UIView *view2, iCarousel *sel
 - (void)didTap:(UITapGestureRecognizer *)tapGesture
 {
     NSInteger index = [self indexOfItemView:[tapGesture.view.subviews lastObject]];
-    if (_centerItemWhenSelected && index != self.currentItemIndex)
+    if (!_delegate || [_delegate carousel:self shouldSelectItemAtIndex:index])
     {
-        [self scrollToItemAtIndex:index animated:YES];
+        if ((index != self.currentItemIndex && _centerItemWhenSelected) ||
+            (index == self.currentItemIndex && _scrollToItemBoundary))
+        {
+            [self scrollToItemAtIndex:index animated:YES];
+        }
+        [_delegate carousel:self didSelectItemAtIndex:index];
     }
-    [_delegate carousel:self didSelectItemAtIndex:index];
+    else if (_scrollEnabled && _scrollToItemBoundary)
+    {
+        [self scrollToItemAtIndex:self.currentItemIndex animated:YES];
+    }
 }
 
 - (void)didPan:(UIPanGestureRecognizer *)panGesture

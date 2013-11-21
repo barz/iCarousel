@@ -11,10 +11,13 @@
 
 @implementation iCarouselExampleAppDelegate
 
+@synthesize window;
+@synthesize viewController;
+
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
-    [self.window addSubview:self.viewController.view];
-    [self.window makeKeyAndVisible];
+    [window addSubview:viewController.view];
+    [window makeKeyAndVisible];
     return YES;
 }
 
